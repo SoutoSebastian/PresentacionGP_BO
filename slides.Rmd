@@ -974,3 +974,5 @@ for (iter in 1:n_iter) {
 
 }
 ```
+
+# TRAS ESTO, LO QUE SE PUEDE HACER ES VER plot[[i]] Y OBSERVAR CÓMO SE ACTUALIZA PASO A PASO EL MODELO
