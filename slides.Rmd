@@ -321,7 +321,7 @@ Retornar:
 
 ---
 
-```{r}
+```{r results='hide'}
 # setup, librerías y seed
 
 library(DiceKriging) # tiene todo lo de GPs
@@ -571,14 +571,14 @@ for (i in 1:n_functions) {
 }
 ```
 
-```{r}
+```{r results='hide'}
 # juntamos los df
 df_results <- bind_rows(results)
 
 df_results
 ```
 
-```{r}
+```{r results='hide'}
 # resultados
 
 summary_table <- df_results %>%
@@ -595,7 +595,7 @@ summary_table
 # andan re bien, si es un toquecito más grande ahí ya BO gana cómodo
 ```
 
-```{r}
+```{r results='hide'}
 ggplot(df_results,
        aes(x = method, y = regret)) +
 
