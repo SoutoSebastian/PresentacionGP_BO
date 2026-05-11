@@ -1,0 +1,319 @@
+---
+title: "Bayesian Optimization Algorithm"
+author: "Lucas Cavadini, Martin Calsina y Sebastian Souto"
+date: "`r Sys.Date()`"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+---
+
+## Componentes principales
+
+La optimización bayesiana tiene dos componentes fundamentales:
+
+### 1. Surrogate model
+
+Modelo probabilístico de la función objetivo.
+
+En nuestro caso:
+
+- Procesos Gaussianos.
+
+
+### 2. Función de adquisición
+
+Usa el surrogate model para decidir:
+
+> “¿Dónde conviene evaluar la función ahora?”
+
+Ejemplos:
+
+- Expected Improvement (EI)
+- Upper Confidence Bound (UCB)
+
+---
+
+## 1. Procesos Gaussianos
+
+### Motivación
+
+No conocemos la función verdadera:
+
+\[
+f(x)
+\]
+
+Entonces modelamos incertidumbre sobre ella.
+
+\vspace{0.8cm}
+
+### Idea:
+
+\vspace{0.4cm}
+
+> En vez de asumir una única función, consideramos una distribución de probabilidad sobre funciones posibles.
+
+---
+
+### Definición formal
+
+\vspace{0.4cm}
+
+Un Proceso Gaussiano es una colección de variables aleatorias tal que cualquier subconjunto finito de ellas tiene distribución normal multivariada.
+
+\vspace{0.8cm}
+
+### Notación:
+
+\[
+f(x) \sim GP(\mu(x), k(x,x'))
+\]
+
+---
+
+## Componentes
+
+
+### Mean function
+
+\[
+\mu(x)=\mathbb{E}[f(x)]
+\]
+
+Representa el valor esperado de la función.
+
+\vspace{0.3cm}
+
+### Kernel (covariance function)
+
+\[
+k(x,x') = Cov(f(x),f(x'))
+\]
+
+\vspace{0.6cm}
+
+Determina:
+
+- correlación entre puntos,
+- suavidad,
+- periodicidad,
+- comportamiento de las funciones.
+
+---
+
+#### Intuición:
+\vspace{0.3cm}
+
+Si $k(x,x')$ es grande cuando $x \approx x'$ entonces el GP “cree” que $f(x) \approx f(x')$
+
+\vspace{0.6cm}
+
++ Ejemplo: Kernel RBF
+
+\[
+k(x,x') = \sigma_f^2 \exp\left(-\frac{||x-x'||^2}{2l^2}\right)
+\]
+
+Hiperparámetros:
+
+- \(l\): length-scale
+- \(\sigma_f^2\): varianza
+
+---
+
+
+## Actualización Bayesiana del GP
+
+
+\vspace{0.3cm}
+
+### Prior
+
+Antes de observar datos:
+
+\[
+f \sim GP(\mu,k)
+\]
+
+### Datos observados
+
+Supongamos que observamos $D = \{(x_i,y_i)\}_{i=1}^n$ con $y_i=f(x_i)$ (o con ruido).
+
+\vspace{0.3cm}
+
+### Posterior
+
+Luego de observar datos:
+
+\[
+f|D \sim GP(\mu_n,k_n)
+\]
+
+El posterior sigue siendo un GP.
+
+---
+
+## Distribución conjunta
+
+Para puntos $x_1,\dots,x_n$, el GP induce:
+
+\[
+(f(x_1),\dots,f(x_n), f(x_*)) \sim \mathcal N(\mu,K)
+\]
+
+con:
+
+\[
+K_{ij}=k(x_i,x_j)
+\]
+
+Consideramos:
+
+\[
+\begin{pmatrix}
+y\\
+f_*
+\end{pmatrix}
+\sim
+\mathcal N
+\left(
+\begin{pmatrix}
+\mu(X)\\
+\mu(x_*)
+\end{pmatrix},
+\begin{pmatrix}
+K(X,X) & K(X,x_*)\\
+K(x_*,X) & k(x_*,x_*)
+\end{pmatrix}
+\right)
+\]
+
+---
+
+Entonces:
+
+\[
+f(x_*)|D
+\sim
+\mathcal N(\mu_n(x_*),\sigma_n^2(x_*))
+\]
+
++ Posterior mean
+
+\[
+\mu_n(x_*)
+=
+\mu(x_*)
++
+K(x_*,X)K(X,X)^{-1}(y-\mu(X))
+\]
+
++ Posterior variance
+
+\[
+\sigma_n^2(x_*)
+=
+k(x_*,x_*)
+-
+K(x_*,X)K(X,X)^{-1}K(X,x_*)
+\]
+
+\vspace{0.3cm}
+
+
+
+---
+
+## 2. Función de adquisición
+
+
+Función que utiliza el modelo probabilístico actual para decidir cuál es el próximo punto más conveniente para evaluar de la función objetivo.
+
+\vspace{0.8cm}
+
+### Trade-off exploración vs explotación
+
+\vspace{0.3cm}
+
++ Explotación
+
+Evaluar donde la media predicha es alta.
+
+\vspace{0.2cm}
+
++ Exploración
+
+Evaluar donde la incertidumbre es grande.
+
+---
+
+## Upper Confidence Bound (UCB)
+
+
+### Definición
+
+\[
+UCB(x)=\mu_n(x)+\kappa \sigma_n(x)
+\]
+
+\vspace{0.8cm}
+
+### Interpretación
+
++ Primer término $\mu_n(x)$ → explotación.
+
+
++ Segundo término $\kappa \sigma_n(x)$ → exploración.
+
+---
+
+## Expected Improvement (EI)
+
+### Definición
+
+Sea $f^+ = \max_i y_i$ el mejor valor observado. Definimos:
+
+\[
+I(x)=\max(f(x)-f^+,0)
+\]
+
+Entonces:
+
+\[
+EI(x)=\mathbb E[I(x)]
+\]
+
+\vspace{0.8cm}
+
++ Intuición: Es el valor esperado de la mejora que aporta $f(x)$, nos quedaremos con el argumento que la maximice.
+
+---
+
+## Pseudocódigo del algoritmo 
+
+\scriptsize
+```text
+Definir prior GP sobre f
+
+Observar f en n_0 puntos iniciales
+n <- n_0
+
+Mientras n <= N:
+
+    Actualizar posterior GP
+
+    x_n <- argmax a(x)
+
+    y_n <- f(x_n)
+
+    Agregar (x_n,y_n)
+
+    n <- n + 1
+
+Retornar:
+    - mejor punto observado, o
+    - punto con mayor media posterior
+```
