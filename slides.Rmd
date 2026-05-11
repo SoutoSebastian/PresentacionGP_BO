@@ -377,7 +377,7 @@ generate_function <- function() {
 # Devuelve un vector de EI(x) según los mu_n y sigma_n pasados.
 # En el paper está la eq 8 para el EI(x), yo uso la fórmula que citan acá:
 # https://stats.stackexchange.com/questions/426782/intuitive-understanding-of-expected-improvement-for-gaussian-process
-# que es un toque más corta, si quieren.
+# que es un toque más corta, si quieren usamos la del paper, no hay drama 
 expected_improvement <- function(mu_n, sigma_n, f_best) {
 
   # esto es lo que va dentro de la funciones de densidad y acumulada de la normal
@@ -388,7 +388,7 @@ expected_improvement <- function(mu_n, sigma_n, f_best) {
  
   
   # si sigma_n es aprox 0, es porque es un punto ya sampleado (o muy cerca, numéricamente iguales),
-  # su valor de f(x) debe ser menor igual a uno de los f_m(x), m <= n que vimos antes.
+  # su valor de f(x) debe ser menor igual a uno de los f_m(x), m <= n que vimos antes
   ei[sigma_n < 1e-9] <- 0 # su EI es 0 entonces
 
   return(ei)
