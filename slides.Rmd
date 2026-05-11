@@ -344,28 +344,68 @@ set.seed(123)
 # 2: como con el desarrollo en serie de fourier de una función cualquiera, generamos senos y cosenos (frecuencias) con 
 # ciertos, períodos y fases [opté por esto porque es un toque más "suave" que lo que puede llegar a salir un polinomio] 
 
+# UPDATE: al final hice las dos
+
+generate_pol <- function() {
+
+    # grado 5, les pongo a todos la misma distribución, no sé si es mucho lío
+    a_0 <- runif(1, -10, 10)
+    a_1 <- runif(1, -10, 10)
+    a_2 <- runif(1, -10, 10)
+    a_3 <- runif(1, -10, 10)
+    a_4 <- runif(1, -10, 10)
+
+    return( function(x) {
+
+        a_0 + a_1*x + a_2*x^2 + a_3*x^3 + a_4*x^4
+
+    })
+
+}
+
+# UPDATE:
+# Al graficar las f en [0, 30], vi que quedaban básicamente como senos o cosenos con un
+# periodo re cortito. Para hacer algo más "realista" (Hay un óptimo o poquitos) voy a hacer que
+# los coefs sean decrecientes a medida que metemos más términos (así SI es la serie de fourier de una f)
+generate_fourier <- function() {
+
+  K <- 30 # cant de términos
+
+  # las amplitudes son decrecientes
+  a <- exp(-seq(0, K-1)/1.5)
+
+  a <- a * runif(K, 0.5, 10) # y bueno, las hacemos aleatorias para obtener distintas funciones
+
+  # agarramos fases para senos y cosenos
+  phi <- runif(K, 0, 2*pi)
+  psi <- runif(K, 0, 2*pi)
+
+  # la f como tal
+  function(x) {
+
+        y <- 0
+
+        # la serie truncada hasta K
+        for (k in 1:K) {
+
+            freq <- 2*pi*k/30
+
+            y <- y + a[k] * sin(freq*x + phi[k]) + 0.7*a[k] * cos(freq*x + psi[k])
+        
+        }
+
+        return(y)
+  }
+
+}
+
 generate_function <- function() {
-
-  # los valores min y max de las uniformes son completamente arbitrarios
-
-  a1 <- runif(1, -5, 5)
-  a2 <- runif(1, 0.5, 2)
-  a3 <- runif(1, 0.1, 1)
-
-  b1 <- runif(1, 0.5, 2)
-  b2 <- runif(1, 2, 5)
-  b3 <- runif(1, 5, 10)
-
-  # va, estos no pq es una fase
-  c1 <- runif(1, 0, 2*pi)
-  c2 <- runif(1, 0, 2*pi)
-  c3 <- runif(1, 0, 2*pi)
-
-  return( function(x) {
-    a1*sin(b1*x + c1) +
-      a2*cos(b2*x + c2) +
-      a3*sin(b3*x + c3)
-  }) 
+  
+  return(
+    #generate_pol()
+    generate_fourier()
+  )
+   
 }
 ```
 
@@ -515,10 +555,10 @@ bayes_opt <- function(f, # la f a optimizar
 
 ```{r}
 # params de simulación
-n_functions <- 30
-budget <- 10# el N grande
+n_functions <- 50
+budget <- 8 # el N grande
 x_min = 0
-x_max = 30
+x_max = 100
 ```
 
 ```{r}
@@ -567,6 +607,7 @@ for (i in 1:n_functions) {
       true_max - rand_res$y_best,
       true_max - bo_res$y_best
     )
+
   )
 }
 ```
@@ -591,8 +632,8 @@ summary_table <- df_results %>%
 
 summary_table
 
-# OJO, si el intervalo es muy chiquito, por ser nuestras funciones relativamente suaves y N=10, Grid Search y Random Search
-# andan re bien, si es un toquecito más grande ahí ya BO gana cómodo
+# OJO, si el intervalo es muy chiquito, por ser nuestras funciones relativamente suaves y N también chico, Grid Search y Random Search
+# le pasan el trapo al GP-BO
 ```
 
 ```{r results='hide'}
@@ -608,4 +649,328 @@ ggplot(df_results,
     x = "",
     y = "Regret"
   )
+```
+
+---
+
+```{r}
+
+# acá la idea es ver cómo paso a paso se agarra un nuevo punto y se actualizan distribución de funciones descriptas por el GP
+# y el EI_n(x) de a snapshots (pq me parece pedagógico)
+
+# esto plotea TODO lo que necesitamos:
+# - la función subyacente VERDADERA que el BO no conoce (pero nosotros sí)
+# - los puntos observados hasta ahora (x_1, ..., x_m) y sus correspondientes outputs
+# - la media de la distribución del GP (el vector mu)
+# - la incerteza de la distribución del GP (el vector sigma, para armar la banditas)
+# - el grafico del EI_n(x)
+make_base_plot <- function(
+    x_grid, # dominio para evaluar
+    y_true, # la imagen de la f verdadera
+    mu = NULL, # media actual del GP
+    sigma = NULL, # su stdv
+    ei = NULL, # imagen del EI actual en el dominio analizado
+    old_points = NULL, # puntos "viejos", o sea los x_m con m <= n en la nésima iteración
+    new_points = NULL, # nuevos puntos a evaluar (SALVO LA PRIMER ITERACIÓN, que son 3, SIEMPRE TERMINA SIENDO UNO)
+    title = "" # 🚬
+) {
+
+  # ATENCION AL LECTOR: esta función es MUY turbia, pero básicamente 
+
+  # f posta
+  df_true <- data.frame(
+    x = x_grid,
+    y = y_true
+  )
+  
+  # gráfico de la f subyacente y el eje de abscisas
+  p1 <- ggplot() +
+
+    geom_hline(
+    yintercept = 0,
+    linewidth = 0.5
+    ) +
+
+    geom_line(
+      data = df_true,
+      aes(x = x, y = y),
+      linewidth = 1
+    ) +
+
+    theme_minimal() +
+
+    labs(
+      title = title,
+      y = "f(x)"
+    )
+
+
+  # dibujamos la GP sólo si mu no es null (o sea, si no es la primer a priori)
+  if (!is.null(mu)) {
+
+    df_gp <- data.frame(
+      x = x_grid,
+      mu = mu,
+      sigma = sigma
+    )
+
+    df_gp <- df_gp %>%
+      mutate(
+        lower = mu - 1.96*sigma,
+        upper = mu + 1.96*sigma
+      )
+
+    p1 <- p1 +
+
+      geom_ribbon(
+        data = df_gp,
+        aes(x = x, ymin = lower, ymax = upper),
+        alpha = 0.2
+      ) +
+
+      geom_line(
+        data = df_gp,
+        aes(x = x, y = mu),
+        linetype = "dashed"
+      )
+  }
+
+  # los puntos que ya vi hasa ahora los dibujo en negro
+  if (!is.null(old_points)) {
+
+    p1 <- p1 +
+
+      geom_point(
+        data = old_points,
+        aes(x = x, y = y),
+        color = "black",
+        size = 3
+      )
+  }
+
+  # el nuevo punto que voy a usar lo marco en rojo
+  if (!is.null(new_points)) {
+
+    p1 <- p1 +
+
+      geom_point(
+        data = new_points,
+        aes(x=x, y=y),
+        color = "red",
+        size = 4
+      )
+  }
+
+  # la ei la dibujo sólo si no es nula
+  if (!is.null(ei)) {
+
+    df_ei <- data.frame(
+      x = x_grid,
+      ei = ei
+    )
+
+    p2 <- ggplot(
+      df_ei,
+      aes(x = x, y = ei)
+    ) +
+
+      geom_line(linewidth = 1) +
+
+      theme_minimal() +
+
+      labs(
+        title = "Expected Improvement",
+        y = "EI(x)"
+      )
+
+    return(p1 / p2)
+  }
+
+  return(p1)
+}
+```
+
+```{r}
+# agarramos una f junto con algunos puntos iniciales
+
+set.seed(123)
+
+# ojeando, a fines del ejemplo, este dominio da piola
+x_min <- 0
+x_max <- 20
+
+f <- generate_function()
+
+x_grid <- seq(x_min, x_max, length.out = 1000)
+
+y_true <- f(x_grid)
+
+X_obs <- c()
+y_obs <- c()
+
+# OJO, estos puntos los elijo viendo el gráfico para que de bien
+X_new <- c(1, 4, 12)
+y_new <- f(X_new)
+
+n_iter <- 7
+
+plots <- list()
+```
+
+
+```{r}
+
+# prior antes de simular
+prior_mu <- rep(0, length(x_grid))
+prior_sigma <- rep(1, length(x_grid))
+
+plots[[1]] <- make_base_plot(
+  x_grid,
+  y_true,
+  mu = prior_mu,
+  sigma = prior_sigma*1.96,
+  title = "GP a priori"
+)
+```
+
+```{r}
+#mostramos x iniciales
+new_df <- data.frame(
+  x = X_new,
+  y = rep(0, length(X_new))
+)
+
+plots[[2]] <- make_base_plot(
+  x_grid,
+  y_true,
+  mu = prior_mu,
+  sigma = prior_sigma,
+  new_points = new_df,
+  title = "X sampleados inicialmente"
+)
+```
+
+```{r}
+# para cada uno mostramos el par (x,y)
+
+new_df <- data.frame(
+  x = X_new,
+  y = y_new
+)
+
+plots[[3]] <- make_base_plot(
+  x_grid,
+  y_true,
+  mu = prior_mu,
+  sigma = prior_sigma,
+  new_points = new_df,
+  title = "Evaluamos f(x) sobre la muestra"
+)
+```
+
+```{r}
+
+old_df <- data.frame(
+    x = c(),
+    y = c()
+)
+
+for (iter in 1:n_iter) {
+
+  X_new <- new_df$x
+  y_new <- new_df$y
+
+  X_obs <- old_df$x
+  y_obs <- old_df$y
+
+  # actualizo el GP
+  model <- km(
+    design = data.frame(x = c(X_obs, X_new)),
+    response = c(y_obs, y_new),
+    covtype = "exp",
+    control = list(trace = FALSE)
+  )
+
+  # decime cómo se distribuye la f para vos
+  pred <- predict(
+    model,
+    newdata = data.frame(x = x_grid),
+    type = "SK"
+  )
+
+  mu <- pred$mean
+  sigma <- pred$sd
+
+  # ei
+  ei <- expected_improvement(
+    mu,
+    sigma,
+    max(c(y_obs, y_new))
+  )
+  
+  if (nrow(old_df) == 0) { #la primer iter dará 0, el resto chill
+        plots[[3*iter + 1]] <- make_base_plot(
+        x_grid,
+        y_true,
+        mu = mu,
+        sigma = sigma,
+        #old_points = old_df,
+        new_points = new_df,
+        title = "Actualizamos el GP y el EI con las nuevas observaciones",
+        ei=ei
+    )
+  } else {
+        plots[[3*iter + 1]] <- make_base_plot(
+        x_grid,
+        y_true,
+        mu = mu,
+        sigma = sigma,
+        old_points = old_df,
+        new_points = new_df,
+        title = "Actualizamos el GP y el EI con las nuevas observaciones",
+        ei=ei
+    )
+  }
+  
+
+  old_df <- rbind(old_df, new_df) # el punto que era nuevo ahora es viejo
+
+  # actualizamos quién es el nuevo punto
+  new_x <- x_grid[which.max(ei)]
+
+  new_df <- data.frame(
+    x=new_x,
+    y=0
+  )
+
+  plots[[3*iter + 2]] <- make_base_plot(
+    x_grid,
+    y_true,
+    mu = mu,
+    sigma = sigma,
+    old_points = old_df,
+    new_points = new_df,
+    title = "Elegimos un x* que maximice EI(x*)",
+    ei = ei
+  )
+
+  new_y <- f(new_x)
+
+  new_df <- data.frame(
+    x=new_x,
+    y=new_y
+  )
+
+  plots[[3*iter + 3]] <- make_base_plot(
+    x_grid,
+    y_true,
+    mu = mu,
+    sigma = sigma,
+    old_points = old_df,
+    new_points = new_df,
+    title = "Evaluamos f(x*)",
+    ei = ei
+  )
+
+}
 ```
