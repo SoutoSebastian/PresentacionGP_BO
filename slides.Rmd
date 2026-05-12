@@ -337,7 +337,13 @@ UCB(x)=\mu_n(x)+\kappa \sigma_n(x)
 
 ### Definición
 
-Sea $f^+ = \max_i y_i$ el mejor valor observado. Definimos:
+Sea
+
+\[
+f^+ = \max_i y_i
+\]
+
+el mejor valor observado. Definimos:
 
 \[
 I(x)=\max(f(x)-f^+,0)
@@ -349,9 +355,11 @@ Entonces:
 EI(x)=\mathbb E[I(x)]
 \]
 
-\vspace{0.8cm}
+\vspace{0.6cm}
 
-+ Intuición: Es el valor esperado de la mejora que aporta $f(x)$, nos quedaremos con el argumento que la maximice.
++ Intuición:
+EI representa la mejora esperada respecto al mejor valor observado hasta el momento.
+El próximo punto a evaluar será aquel que maximice $EI(x)$.
 
 ---
 
