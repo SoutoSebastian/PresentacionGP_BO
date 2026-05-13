@@ -409,20 +409,6 @@ Genera $N$ puntos en el intervalo, evalúa y toma el máximo.
 
 ---
 
-## Benchmarks
-
-Podemos comparar el rendimiento del algoritmo con otros dos más simples sobre un intervalo $[a, b]$ fijo y muchas funciones definidas sobre el mismo:
-
-+ Grid Search
-
-Agarra $N$ puntos equiespaciados en el intervalo, evalúa y toma el máximo.
-
-+ Random Search
-
-Genera $N$ puntos en el intervalo, evalúa y toma el máximo.
-
----
-
 ## Regret
 
 A fines de tener una métrica cuantitativa para la comparación, dada una función $f(x)$ con máximo en $x_0$ y $x*$ el óptimo encontrado por un algoritmo, 
@@ -443,10 +429,10 @@ En lo siguiente, elegimos utilizar $[a, b] = [0, 100]$, $k=100$ funciones y $N=8
 
 library(DiceKriging) # tiene todo lo de GPs
 library(ggplot2) # grafiquinhos
-library(dplyr) # trae funciones útiles al estilo pandas para dataframes
 library(patchwork) # simplifica un toque el uso de ggplot2
 
 set.seed(123)
+
 ```
 
 
@@ -732,9 +718,10 @@ for (i in 1:n_functions) {
 df_results <- bind_rows(results)
 
 df_results
+
 ```
 
-## Resultados 
+## Resultados
 
 ```{r}
 # resultados
