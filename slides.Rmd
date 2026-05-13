@@ -388,3 +388,782 @@ Retornar:
     - mejor punto observado, o
     - punto con mayor media posterior
 ```
+
+---
+
+# Simulación
+
+---
+
+## Benchmarks
+
+Podemos comparar el rendimiento del algoritmo con otros dos más simples sobre un intervalo $[a, b]$ fijo y muchas funciones definidas sobre el mismo:
+
++ Grid Search
+
+Agarra $N$ puntos equiespaciados en el intervalo, evalúa y toma el máximo.
+
++ Random Search
+
+Genera $N$ puntos en el intervalo, evalúa y toma el máximo.
+
+---
+
+## Benchmarks
+
+Podemos comparar el rendimiento del algoritmo con otros dos más simples sobre un intervalo $[a, b]$ fijo y muchas funciones definidas sobre el mismo:
+
++ Grid Search
+
+Agarra $N$ puntos equiespaciados en el intervalo, evalúa y toma el máximo.
+
++ Random Search
+
+Genera $N$ puntos en el intervalo, evalúa y toma el máximo.
+
+---
+
+## Regret
+
+A fines de tener una métrica cuantitativa para la comparación, dada una función $f(x)$ con máximo en $x_0$ y $x*$ el óptimo encontrado por un algoritmo, 
+definimos el $Regret$ del mismo:
+
+\[
+f(x_0) - f(x*) 
+\]
+
+
+En lo siguiente, elegimos utilizar $[a, b] = [0, 100]$, $k=100$ funciones y $N=8$. En el caso de BO, $N$ va a ser la cantidad total de sampleos.
+
+---
+
+
+```{r results='hide'}
+# setup, librerías y seed
+
+library(DiceKriging) # tiene todo lo de GPs
+library(ggplot2) # grafiquinhos
+library(dplyr) # trae funciones útiles al estilo pandas para dataframes
+library(patchwork) # simplifica un toque el uso de ggplot2
+
+set.seed(123)
+```
+
+
+```{r}
+
+# generador de funciones aleatorias
+# podríamos hacerlo de varias maneras:
+# 1: planteamos que las mismas se pueden aproximar/siguen un polinomio de grado fijo en el intervalo de interés
+#   por ejemplo, f(x) = a_0 + a_1*x + a_2*x^2 + a_3*x^3 +a_4*x^4 y lo que generamos son los coeficientes a_i
+# 2: como con el desarrollo en serie de fourier de una función cualquiera, generamos senos y cosenos (frecuencias) con 
+# ciertos, períodos y fases [opté por esto porque es un toque más "suave" que lo que puede llegar a salir un polinomio] 
+
+# UPDATE: al final hice las dos
+
+generate_pol <- function() {
+
+    # grado 5, les pongo a todos la misma distribución, no sé si es mucho lío
+    a_0 <- runif(1, -10, 10)
+    a_1 <- runif(1, -10, 10)
+    a_2 <- runif(1, -10, 10)
+    a_3 <- runif(1, -10, 10)
+    a_4 <- runif(1, -10, 10)
+
+    return( function(x) {
+
+        a_0 + a_1*x + a_2*x^2 + a_3*x^3 + a_4*x^4
+
+    })
+
+}
+
+# UPDATE:
+# Al graficar las f en [0, 30], vi que quedaban básicamente como senos o cosenos con un
+# periodo re cortito. Para hacer algo más "realista" (Hay un óptimo o poquitos) voy a hacer que
+# los coefs sean decrecientes a medida que metemos más términos (así SI es la serie de fourier de una f)
+generate_fourier <- function() {
+
+  K <- 30 # cant de términos
+
+  # las amplitudes son decrecientes
+  a <- exp(-seq(0, K-1)/1.5)
+
+  a <- a * runif(K, 0.5, 10) # y bueno, las hacemos aleatorias para obtener distintas funciones
+
+  # agarramos fases para senos y cosenos
+  phi <- runif(K, 0, 2*pi)
+  psi <- runif(K, 0, 2*pi)
+
+  # la f como tal
+  function(x) {
+
+        y <- 0
+
+        # la serie truncada hasta K
+        for (k in 1:K) {
+
+            freq <- 2*pi*k/30
+
+            y <- y + a[k] * sin(freq*x + phi[k]) + 0.7*a[k] * cos(freq*x + psi[k])
+        
+        }
+
+        return(y)
+  }
+
+}
+
+generate_function <- function() {
+  
+  return(
+    #generate_pol()
+    generate_fourier() #es el que vi que da mejor para el ultimo ejemplo
+  )
+   
+}
+```
+
+```{r}
+
+
+# Es el EI dado un mu_n(x), sigma_n(x) y f_best
+# es decir, acá mu_n no es la función mu_n si la misma ya evaluada en un x o un vector de x.
+# Devuelve un vector de EI(x) según los mu_n y sigma_n pasados.
+# En el paper está la eq 8 para el EI(x), yo uso la fórmula que citan acá:
+# https://stats.stackexchange.com/questions/426782/intuitive-understanding-of-expected-improvement-for-gaussian-process
+# que es un toque más corta, si quieren usamos la del paper, no hay drama 
+expected_improvement <- function(mu_n, sigma_n, f_best) {
+
+  # esto es lo que va dentro de la funciones de densidad y acumulada de la normal
+  z <- (mu_n - f_best) / sigma_n
+
+  ei <- (mu_n - f_best) * pnorm(z) +
+        sigma_n * dnorm(z)
+ 
+  
+  # si sigma_n es aprox 0, es porque es un punto ya sampleado (o muy cerca, numéricamente iguales),
+  # su valor de f(x) debe ser menor igual a uno de los f_m(x), m <= n que vimos antes
+  ei[sigma_n < 1e-9] <- 0 # su EI es 0 entonces
+
+  return(ei)
+
+}
+```
+
+```{r}
+# evaluamos f en puntos equiespaciados
+grid_search <- function(f, x_min=0, x_max=10, N=10) {
+
+  x <- seq(x_min, x_max, length.out = N)
+
+  y <- f(x)
+
+  best_idx <- which.max(y)
+
+  list(
+    x_best = x[best_idx],
+    y_best = y[best_idx]
+  )
+}
+```
+
+```{r}
+# evaluamos f en N puntos random
+random_search <- function(f, x_min=0, x_max=10, N = 10) {
+
+  x <- runif(N, x_min, x_max)
+
+  y <- f(x)
+
+  best_idx <- which.max(y)
+
+  list(
+    x_best = x[best_idx],
+    y_best = y[best_idx]
+  )
+}
+```
+
+```{r}
+# lo picante
+bayes_opt <- function(f, # la f a optimizar
+                      x_min=0, x_max=10, #dominio
+                      N = 10, # cant total de evaluaciones
+                      init_points = 3, # n_0, la cant de puntos iniciales a ver antes del loop
+                      grid_size = 1000) { # lo
+
+  # puntos iniciales
+  X_obs <- runif(init_points, x_min, x_max) # generamos los puntos
+  y_obs <- f(X_obs) # evaluamos
+
+  x_grid <- seq(x_min, x_max, length.out = grid_size) # "dominio" (discretizado en algún sentido) de nuestra función, lo usamos para calcular el EI
+
+  for (iter in 1:(N - init_points)) {
+
+    # ajustar GP: km es la función principal para ajustar modelitos de DiceKriging, estima los params maximizando la likelihood por default
+    # OJO: ENTIENDO QUE UN KRIGING MODEL (o al menos lo que escupe km) ES UNA GAUSSIAN PROCESS REGRESSION Y QUE SE LE DICE
+    # KRIGING PQ ES ALGO MAS GENERAL (el paper de Kriging son 55 páginas donde habla de bocha de cosas aparte de GP)
+    model <- km(
+      design = data.frame(x = X_obs), # los inputs
+      response = y_obs, # los outputs
+      covtype = "exp", # el kernel o covarianza usado, mandamos el exponencial pq es el del paper (ma vale)
+      control = list(trace = FALSE) # es para que no printee cosas al optimizar/actualizar el modelo
+      # dice la doc help(km):
+      #The optimisers are tunable by the user by the argument ‘control’.
+      #Most of the control parameters proposed by ‘BFGS’ and ‘genoud’ can
+      #be passed to ‘control’ except the ones that must be forced [for
+      #the purpose of optimization setting], as indicated in the table
+      #below. See ‘optim’ and ‘genoud’ to get more details about them.
+    )
+
+    # predicción posterior, dice help(predict):
+    #Predicted values and (marginal of joint) conditional variances
+    #based on a ‘km’ model.  95 % confidence intervals are given, based
+    #on strong assumptions: Gaussian process assumption, specific prior
+    #distribution on the trend parameters, known covariance parameters.
+    # Nos dan esperanza y sigmas
+    pred <- predict(
+      model,
+      newdata = data.frame(x = x_grid), 
+      type = "SK" # esto influye en cómo es que se calcula el mean y el desvío estándar, puede valer UK o SK,
+                  # en el paper de Krieger, si buscan la mean/sigma_SK y la comparan con la mean/sigma_UK
+                  # CREO que la de NUESTRO paper es la de las eqs (2) y (3)
+    )
+
+    # se explican solitos
+    mu <- pred$mean
+    sigma <- pred$sd
+
+    # acquisition, la posta es que mu y sigma van a ser un vector sólo la primera vez (que sampleamos 3 puntos), luego es uno solo
+    ei <- expected_improvement(
+      mu,
+      sigma,
+      max(y_obs) #el f* del paper
+    )
+
+    # próximo punto: el paper no aclara cómo conseguir el x que maximice el EI_n(x), sólo te dice "no te persigas, que esto se
+    # optimiza fácil pq es barato evaluarla, a mí me funca usar Newton". Yo soy más polenta y hago un grid search 
+    # en mil puntos en el intervalo [0, 10]
+    # OJO: si quieren podemos usar algún algoritmo de optimización para buscarlo, pero a fines prácticos con esto va a bastar porque
+    # probamos una barbaridad de puntos ()
+    next_x <- x_grid[which.max(ei)]
+
+    next_y <- f(next_x) # evaluamos
+
+    # actualizamos el dataset
+    X_obs <- c(X_obs, next_x)
+    y_obs <- c(y_obs, next_y)
+  }
+
+  # reportamos el mayor f(x_m) más grande que hayamos visto y el x_m
+  best_idx <- which.max(y_obs)
+
+  list(
+    x_best = X_obs[best_idx],
+    y_best = y_obs[best_idx]
+  )
+
+}
+```
+
+
+```{r}
+# params de simulación
+n_functions <- 100
+budget <- 8 # el N grande
+x_min = 0
+x_max = 100
+```
+
+```{r}
+
+set.seed(123)
+
+results <- vector("list", n_functions)
+
+for (i in 1:n_functions) {
+
+  f <- generate_function()
+
+  # grilla para buscar el máximo "verdadero" de la f en cuestión
+  fine_grid <- seq(x_min, x_max, length.out = 10000)
+
+  y_fine <- f(fine_grid)
+
+  true_max <- max(y_fine)
+
+  # métodos
+  grid_res <- grid_search(f, x_min=x_min, x_max=x_max, N=budget)
+
+  rand_res <- random_search(f, x_min=x_min, x_max=x_max, N = budget)
+
+  bo_res <- bayes_opt(f, x_min=x_min, x_max=x_max, N = budget)
+
+  # guardamos resultados
+  results[[i]] <- data.frame(
+    function_id = i,
+
+    method = c(
+      "Grid Search",
+      "Random Search",
+      "Bayesian Optimization"
+    ),
+
+    best_found = c(
+      grid_res$y_best,
+      rand_res$y_best,
+      bo_res$y_best
+    ),
+
+    # cuánto le faltó a cada método para llegar al verdadero máximo
+    regret = c(
+      true_max - grid_res$y_best,
+      true_max - rand_res$y_best,
+      true_max - bo_res$y_best
+    )
+
+  )
+}
+```
+
+```{r results='hide'}
+# juntamos los df
+df_results <- bind_rows(results)
+
+df_results
+```
+
+## Resultados 
+
+```{r}
+# resultados
+
+# si tienen idea de cómo hacer que se vea mejor esta tablita en la slides, bienvenido sea
+
+summary_table <- df_results %>%
+  group_by(method) %>%
+  summarise(
+    mean_regret = mean(regret),
+    sd_regret = sd(regret),
+    mean_best = mean(best_found)
+  )
+
+print(summary_table)
+# OJO, si el intervalo es muy chiquito, por ser nuestras funciones relativamente suaves y N también chico, Grid Search y Random Search
+# le pasan el trapo al GP-BO
+```
+
+---
+
+## Resultados
+
+```{r }
+# un box plot de todd la vida
+ggplot(df_results,
+       aes(x = method, y = regret)) +
+
+  geom_boxplot() +
+
+  theme_minimal() +
+
+  labs(
+    title = "Regret por método",
+    x = "",
+    y = "Regret"
+  )
+```
+
+---
+
+```{r}
+
+# acá la idea es ver cómo paso a paso se agarra un nuevo punto y se actualizan distribución de funciones descriptas por el GP
+# y el EI_n(x) de a snapshots (pq me parece pedagógico)
+
+# esto plotea TODO lo que necesitamos:
+# - la función subyacente VERDADERA que el BO no conoce (pero nosotros sí)
+# - los puntos observados hasta ahora (x_1, ..., x_m) y sus correspondientes outputs
+# - la media de la distribución del GP (el vector mu)
+# - la incerteza de la distribución del GP (el vector sigma, para armar la banditas)
+# - el grafico del EI_n(x) si es que existe (todas las iteraciones del snapshot salvo la primera en la que todavía no hay datos para calcular la f_n*)
+make_base_plot <- function(
+    x_grid, # dominio para evaluar
+    y_true, # la imagen de la f verdadera
+    mu = NULL, # media actual del GP
+    sigma = NULL, # su stdv
+    ei = NULL, # imagen del EI actual en el dominio analizado
+    old_points = NULL, # puntos "viejos", o sea los x_m con m <= n en la nésima iteración
+    new_points = NULL, # nuevos puntos a evaluar (SALVO LA PRIMER ITERACIÓN, que son 3, SIEMPRE TERMINA SIENDO UNO)
+    title = "" # 🚬
+) {
+
+  # ATENCION AL LECTOR: esta función es MUY turbia, pero básicamente 
+
+  # f posta
+  df_true <- data.frame(
+    x = x_grid,
+    y = y_true
+  )
+  
+  # gráfico de la f subyacente y el eje de abscisas
+  p1 <- ggplot() +
+
+    geom_hline(
+    yintercept = 0,
+    linewidth = 0.5
+    ) +
+
+    geom_line(
+      data = df_true,
+      aes(x = x, y = y),
+      linewidth = 1
+    ) +
+
+    theme_minimal() +
+
+    labs(
+      title = title,
+      y = "f(x)"
+    )
+
+
+  # dibujamos la GP sólo si mu no es null (o sea, si no es la primer a priori)
+  if (!is.null(mu)) {
+
+    df_gp <- data.frame(
+      x = x_grid,
+      mu = mu,
+      sigma = sigma
+    )
+
+    df_gp <- df_gp %>%
+      mutate(
+        lower = mu - 1.96*sigma,
+        upper = mu + 1.96*sigma
+      )
+
+    p1 <- p1 +
+
+      geom_ribbon(
+        data = df_gp,
+        aes(x = x, ymin = lower, ymax = upper),
+        alpha = 0.2
+      ) +
+
+      geom_line(
+        data = df_gp,
+        aes(x = x, y = mu),
+        linetype = "dashed"
+      )
+  }
+
+  # los puntos que ya vi hasa ahora los dibujo en negro
+  if (!is.null(old_points)) {
+
+    p1 <- p1 +
+
+      geom_point(
+        data = old_points,
+        aes(x = x, y = y),
+        color = "black",
+        size = 3
+      )
+  }
+
+  # el nuevo punto que voy a usar lo marco en rojo
+  if (!is.null(new_points)) {
+
+    p1 <- p1 +
+
+      geom_point(
+        data = new_points,
+        aes(x=x, y=y),
+        color = "red",
+        size = 4
+      )
+  }
+
+  # la ei la dibujo sólo si no es nula
+  if (!is.null(ei)) {
+
+    df_ei <- data.frame(
+      x = x_grid,
+      ei = ei
+    )
+
+    p2 <- ggplot(
+      df_ei,
+      aes(x = x, y = ei)
+    ) +
+
+      geom_line(linewidth = 1) +
+
+      theme_minimal() +
+
+      labs(
+        title = "Expected Improvement",
+        y = "EI(x)"
+      )
+
+    return(p1 / p2) # si hay ei, mostaramos GP + EI
+  }
+
+  return(p1) # si no, solo GP
+}
+```
+
+```{r}
+# agarramos una f junto con algunos puntos iniciales
+
+set.seed(123)
+
+# ojeando, a fines del ejemplo, este dominio da piola
+x_min <- 0
+x_max <- 20
+
+f <- generate_function()
+
+x_grid <- seq(x_min, x_max, length.out = 1000)
+
+y_true <- f(x_grid)
+
+# OJO, estos puntos los elijo viendo el gráfico para que de bien
+X_new <- c(1, 4, 12)
+y_new <- f(X_new)
+
+n_iter <- 7
+
+plots <- list()
+```
+
+```{r}
+
+# GRAFICOS PARA LOS PUNTOS INICIALES
+# los hago aparte porque los títulos son distintos que los de los siguientes y, además, tienen la GP a priori que los otros no
+
+# prior antes de simular
+prior_mu <- rep(0, length(x_grid))
+prior_sigma <- rep(1, length(x_grid))
+
+plots[[1]] <- make_base_plot(
+  x_grid,
+  y_true,
+  mu = prior_mu,
+  sigma = prior_sigma,
+  title = "GP" #title = "GP a priori"
+)
+
+#mostramos x iniciales sin evaluarlos
+new_df <- data.frame(
+  x = X_new,
+  y = rep(0, length(X_new))
+)
+
+plots[[2]] <- make_base_plot(
+  x_grid,
+  y_true,
+  mu = prior_mu,
+  sigma = prior_sigma,
+  new_points = new_df,
+  title = "GP" #title = "X sampleados inicialmente"
+)
+
+# para cada uno mostramos el par (x,y)
+
+# los 3 puntitos "sampleados" y evaluados
+new_df <- data.frame(
+  x = X_new,
+  y = y_new
+)
+
+plots[[3]] <- make_base_plot(
+  x_grid,
+  y_true,
+  mu = prior_mu,
+  sigma = prior_sigma,
+  new_points = new_df,
+  title = "GP" #title = "Evaluamos f(x) sobre la muestra"
+)
+```
+
+```{r}
+
+# ahora sí, todo lo siguiente pero partiendo de los 3 puntos elegidos
+
+#nothing
+old_df <- data.frame(
+    x = c(),
+    y = c()
+)
+
+for (iter in 1:n_iter) {
+
+  X_new <- new_df$x
+  y_new <- new_df$y
+
+  X_obs <- old_df$x
+  y_obs <- old_df$y
+
+  # actualizo el GP
+  model <- km(
+    design = data.frame(x = c(X_obs, X_new)),
+    response = c(y_obs, y_new),
+    covtype = "exp",
+    control = list(trace = FALSE)
+  )
+
+  # decime cómo se distribuye la f para vos
+  pred <- predict(
+    model,
+    newdata = data.frame(x = x_grid),
+    type = "SK"
+  )
+
+  mu <- pred$mean
+  sigma <- pred$sd
+
+  # ei
+  # OJO: como, al final del día, estamos ploteando el EI(x) sobre una grilla discreta, los puntos ya evaluados a veces no dan EI(x)=0
+  # en el gráfico, se puede corregir, tengo que ver cómo (intenté corrigiendo el EI y se rompieron otros plots, pero es un detalle menor)
+  ei <- expected_improvement(
+    mu_n = mu,
+    sigma_n = sigma,
+    max(c(y_obs, y_new))
+  )
+  
+  if (nrow(old_df) == 0) { #la primer iter dará 0, el resto chill
+        plots[[3*iter + 1]] <- make_base_plot(
+        x_grid,
+        y_true,
+        mu = mu,
+        sigma = sigma,
+        #old_points = old_df,
+        new_points = new_df,
+        title = "GP", #title = "Actualizamos el GP y el EI con las nuevas observaciones", QUITO TITLES Y SE LOS PONGO DIRECTO A LA SLIDES
+        ei=ei
+    )
+  } else {
+        plots[[3*iter + 1]] <- make_base_plot(
+        x_grid,
+        y_true,
+        mu = mu,
+        sigma = sigma,
+        old_points = old_df,
+        new_points = new_df,
+        title = "", #title = "Actualizamos el GP y el EI con las nuevas observaciones",
+        ei=ei
+    )
+  }
+  
+
+  old_df <- rbind(old_df, new_df) # el punto que era nuevo ahora es viejo
+
+  # actualizamos quién es el nuevo punto
+  new_x <- x_grid[which.max(ei)]
+
+  new_df <- data.frame(
+    x=new_x,
+    y=0
+  )
+
+  plots[[3*iter + 2]] <- make_base_plot(
+    x_grid,
+    y_true,
+    mu = mu,
+    sigma = sigma,
+    old_points = old_df,
+    new_points = new_df,
+    title = "GP", #"Elegimos un x* que maximice EI(x*)",
+    ei = ei
+  )
+
+  new_y <- f(new_x)
+  
+  # actualizamos el df nuevo
+  new_df <- data.frame(
+    x=new_x,
+    y=new_y
+  )
+
+  plots[[3*iter + 3]] <- make_base_plot(
+    x_grid,
+    y_true,
+    mu = mu,
+    sigma = sigma,
+    old_points = old_df,
+    new_points = new_df,
+    title = "GP", #title = "Evaluamos f(x*)",
+    ei = ei
+  )
+
+}
+```
+
+# Ejecución paso a paso
+
+```{r results='asis', echo=FALSE}
+
+for (i in seq_along(plots)) {
+
+  cat("\n---\n")
+
+  title <- ""
+
+  if (i == 1) {
+    title <- "Función subyacente y GP a priori"
+  }
+
+  if (i == 2) {
+    title <- "Sampleo inicial"
+  }
+
+  if (i == 3) {
+    title <- "Evaluamos f(x)"
+  }
+
+  if (i == 4) {
+    title <- "Actualizamos nuestro conocimiento"
+  }
+
+  if (i > 4 & (i %% 3 == 2)) {
+    title <- "Elegimos un x* que maximice EI(x*)"
+  }
+
+  if (i > 4 & (i %% 3 == 0)) {
+    title <- "Evaluamos f(x*)"
+  }
+
+  if (i > 4 & (i %% 3 == 1)) {
+    title <- "Actualizamos nuestro conocimiento"
+  }
+
+  cat(
+    paste0(
+      "\n# ",
+      title,
+      "\n\n"
+    )
+  )
+
+  print(plots[[i]])
+}
+```
+
+---
+
+# Cerrando
+
+El algoritmo de Optimización Bayesiana puede resultar útil cuando:
+
++ $f(x)$ es muy cara de evaluar.
+
++ $f(x)$ es una caja negra.
+
++ Tenemos cierto conocimiento o intuición sobre *cómo* es la función y queremos incorporarlo a nuestro algoritmo (en formar de *prior*).
+
+Pero puede sufrir cuando:
+
++ $d$ la dimensión de $x$ es muy grande (en general, $d > 20$).
+
++ la función no es suave o tiene mucho ruido.
