@@ -8,6 +8,69 @@ output: beamer_presentation
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 ```
+
+---
+
+## Imaginemos este problema
+
+Una empresa petrolera está buscando la mejor zona para perforar. Pero surgen algunos inconvenientes:
+
+
+- cada perforación cuesta mucho dinero
+
+- lleva mucho tiempo
+
+- solo vamos a conocer información sobre ese punto específico donde fue la perforación
+
+\vspace{0.8cm}
+
+El problema que estamos queriendo resolver es:
+\[
+\max_{x \in A} f(x)
+\]
+
+
+---
+
+## Funciones de caja negra
+
+La función real $f(x)$ (en el ejemplo, cantidad de petróleo en el terreno en una ubicación $x$) es desconocida. Solo podemos probar un valor de $x$ y observar el resultado.
+
+
+Esto se conoce como función de \textbf{caja negra}:
+
+- no conocemos su fórmula explícita
+
+- no conocemos nada acerca de su forma (concavidad, linealidad)
+
+- no tenemos las derivadas
+ 
+ 
+Si quisiéramos encontrar un óptimo de la función objetivo de manera eficiente no podríamos usar métodos conocidos como, por ejemplo, descenso por el gradiente. 
+
+---
+
+## ¿Cómo podemos encontrar las mejores zonas para perforar?
+
+Una estrategia podría ser, por ejemplo, probar ubicaciones al azar. Pero esto puede ser muy ineficiente (cada perforación es cara, el presupuesto es limitado y encima podríamos quedarnos buscando en zonas malas). 
+
+Para abordar estos casos es que surgen métodos como la \structure{\textbf{Optimización Bayesiana}}: 
+
+- Propone una estrategia iterativa para hallar óptimos mediante el cual, a partir de observaciones iniciales, un modelo va aprendiendo sobre la distribución del conjunto de posibles soluciones.Se enfoca en hallar máximos \textbf{globales}.
+
+
+---
+
+## Bayesian Optimization
+
+El algoritmo mezcla algunas ideas importantes:
+
+- Construye un modelo probabilístico para estimar la distribución del espacio de soluciones factibles.
+- A partir de otra función ("función de adquisición", que si conocemos y podemos evaluar), y de las estimaciones del modelo probabilístico se decide en qué puntos evaluar a la función objetivo.
+- Dicha función de adquisición es elegida según de que se quiera priorizar a la hora de evaluar nuevas observaciones: zonas de alta probabilidad de encontrar buenas soluciones ("explotación") vs. zonas de alta incertidumbre donde aún no evaluamos ("exploración").
+- Con las nuevas observaciones se actualiza el modelo probabilístico y se repite el proceso.
+
+
 ---
 
 ## Componentes principales
@@ -274,7 +337,13 @@ UCB(x)=\mu_n(x)+\kappa \sigma_n(x)
 
 ### Definición
 
-Sea $f^+ = \max_i y_i$ el mejor valor observado. Definimos:
+Sea
+
+\[
+f^+ = \max_i y_i
+\]
+
+el mejor valor observado. Definimos:
 
 \[
 I(x)=\max(f(x)-f^+,0)
@@ -286,9 +355,11 @@ Entonces:
 EI(x)=\mathbb E[I(x)]
 \]
 
-\vspace{0.8cm}
+\vspace{0.6cm}
 
-+ Intuición: Es el valor esperado de la mejora que aporta $f(x)$, nos quedaremos con el argumento que la maximice.
++ Intuición:
+EI representa la mejora esperada respecto al mejor valor observado hasta el momento.
+El próximo punto a evaluar será aquel que maximice $EI(x)$.
 
 ---
 
@@ -317,7 +388,6 @@ Retornar:
     - mejor punto observado, o
     - punto con mayor media posterior
 ```
-
 
 ---
 
