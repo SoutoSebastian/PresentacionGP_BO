@@ -321,6 +321,53 @@ Retornar:
 
 ---
 
+# Simulación
+
+---
+
+## Benchmarks
+
+Podemos comparar el rendimiento del algoritmo con otros dos más simples sobre un intervalo $[a, b]$ fijo y muchas funciones definidas sobre el mismo:
+
++ Grid Search
+
+Agarra $N$ puntos equiespaciados en el intervalo, evalúa y toma el máximo.
+
++ Random Search
+
+Genera $N$ puntos en el intervalo, evalúa y toma el máximo.
+
+---
+
+## Benchmarks
+
+Podemos comparar el rendimiento del algoritmo con otros dos más simples sobre un intervalo $[a, b]$ fijo y muchas funciones definidas sobre el mismo:
+
++ Grid Search
+
+Agarra $N$ puntos equiespaciados en el intervalo, evalúa y toma el máximo.
+
++ Random Search
+
+Genera $N$ puntos en el intervalo, evalúa y toma el máximo.
+
+---
+
+## Regret
+
+A fines de tener una métrica cuantitativa para la comparación, dada una función $f(x)$ con máximo en $x_0$ y $x*$ el óptimo encontrado por un algoritmo, 
+definimos el $Regret$ del mismo:
+
+\[
+f(x_0) - f(x*) 
+\]
+
+
+En lo siguiente, elegimos utilizar $[a, b] = [0, 100]$, $k=100$ funciones y $N=8$. En el caso de BO, $N$ va a ser la cantidad total de sampleos.
+
+---
+
+
 ```{r results='hide'}
 # setup, librerías y seed
 
@@ -331,8 +378,6 @@ library(patchwork) # simplifica un toque el uso de ggplot2
 
 set.seed(123)
 ```
-
----
 
 
 ```{r}
@@ -403,7 +448,7 @@ generate_function <- function() {
   
   return(
     #generate_pol()
-    generate_fourier()
+    generate_fourier() #es el que vi que da mejor para el ultimo ejemplo
   )
    
 }
@@ -555,7 +600,7 @@ bayes_opt <- function(f, # la f a optimizar
 
 ```{r}
 # params de simulación
-n_functions <- 50
+n_functions <- 100
 budget <- 8 # el N grande
 x_min = 0
 x_max = 100
@@ -619,8 +664,12 @@ df_results <- bind_rows(results)
 df_results
 ```
 
-```{r results='hide'}
+## Resultados 
+
+```{r}
 # resultados
+
+# si tienen idea de cómo hacer que se vea mejor esta tablita en la slides, bienvenido sea
 
 summary_table <- df_results %>%
   group_by(method) %>%
@@ -630,13 +679,17 @@ summary_table <- df_results %>%
     mean_best = mean(best_found)
   )
 
-summary_table
-
+print(summary_table)
 # OJO, si el intervalo es muy chiquito, por ser nuestras funciones relativamente suaves y N también chico, Grid Search y Random Search
 # le pasan el trapo al GP-BO
 ```
 
-```{r results='hide'}
+---
+
+## Resultados
+
+```{r }
+# un box plot de todd la vida
 ggplot(df_results,
        aes(x = method, y = regret)) +
 
@@ -645,7 +698,7 @@ ggplot(df_results,
   theme_minimal() +
 
   labs(
-    title = "Regret by optimization method",
+    title = "Regret por método",
     x = "",
     y = "Regret"
   )
@@ -663,7 +716,7 @@ ggplot(df_results,
 # - los puntos observados hasta ahora (x_1, ..., x_m) y sus correspondientes outputs
 # - la media de la distribución del GP (el vector mu)
 # - la incerteza de la distribución del GP (el vector sigma, para armar la banditas)
-# - el grafico del EI_n(x)
+# - el grafico del EI_n(x) si es que existe (todas las iteraciones del snapshot salvo la primera en la que todavía no hay datos para calcular la f_n*)
 make_base_plot <- function(
     x_grid, # dominio para evaluar
     y_true, # la imagen de la f verdadera
@@ -783,10 +836,10 @@ make_base_plot <- function(
         y = "EI(x)"
       )
 
-    return(p1 / p2)
+    return(p1 / p2) # si hay ei, mostaramos GP + EI
   }
 
-  return(p1)
+  return(p1) # si no, solo GP
 }
 ```
 
@@ -805,9 +858,6 @@ x_grid <- seq(x_min, x_max, length.out = 1000)
 
 y_true <- f(x_grid)
 
-X_obs <- c()
-y_obs <- c()
-
 # OJO, estos puntos los elijo viendo el gráfico para que de bien
 X_new <- c(1, 4, 12)
 y_new <- f(X_new)
@@ -817,8 +867,10 @@ n_iter <- 7
 plots <- list()
 ```
 
-
 ```{r}
+
+# GRAFICOS PARA LOS PUNTOS INICIALES
+# los hago aparte porque los títulos son distintos que los de los siguientes y, además, tienen la GP a priori que los otros no
 
 # prior antes de simular
 prior_mu <- rep(0, length(x_grid))
@@ -828,13 +880,11 @@ plots[[1]] <- make_base_plot(
   x_grid,
   y_true,
   mu = prior_mu,
-  sigma = prior_sigma*1.96,
-  title = "GP a priori"
+  sigma = prior_sigma,
+  title = "GP" #title = "GP a priori"
 )
-```
 
-```{r}
-#mostramos x iniciales
+#mostramos x iniciales sin evaluarlos
 new_df <- data.frame(
   x = X_new,
   y = rep(0, length(X_new))
@@ -846,13 +896,12 @@ plots[[2]] <- make_base_plot(
   mu = prior_mu,
   sigma = prior_sigma,
   new_points = new_df,
-  title = "X sampleados inicialmente"
+  title = "GP" #title = "X sampleados inicialmente"
 )
-```
 
-```{r}
 # para cada uno mostramos el par (x,y)
 
+# los 3 puntitos "sampleados" y evaluados
 new_df <- data.frame(
   x = X_new,
   y = y_new
@@ -864,12 +913,15 @@ plots[[3]] <- make_base_plot(
   mu = prior_mu,
   sigma = prior_sigma,
   new_points = new_df,
-  title = "Evaluamos f(x) sobre la muestra"
+  title = "GP" #title = "Evaluamos f(x) sobre la muestra"
 )
 ```
 
 ```{r}
 
+# ahora sí, todo lo siguiente pero partiendo de los 3 puntos elegidos
+
+#nothing
 old_df <- data.frame(
     x = c(),
     y = c()
@@ -902,9 +954,11 @@ for (iter in 1:n_iter) {
   sigma <- pred$sd
 
   # ei
+  # OJO: como, al final del día, estamos ploteando el EI(x) sobre una grilla discreta, los puntos ya evaluados a veces no dan EI(x)=0
+  # en el gráfico, se puede corregir, tengo que ver cómo (intenté corrigiendo el EI y se rompieron otros plots, pero es un detalle menor)
   ei <- expected_improvement(
-    mu,
-    sigma,
+    mu_n = mu,
+    sigma_n = sigma,
     max(c(y_obs, y_new))
   )
   
@@ -916,7 +970,7 @@ for (iter in 1:n_iter) {
         sigma = sigma,
         #old_points = old_df,
         new_points = new_df,
-        title = "Actualizamos el GP y el EI con las nuevas observaciones",
+        title = "GP", #title = "Actualizamos el GP y el EI con las nuevas observaciones", QUITO TITLES Y SE LOS PONGO DIRECTO A LA SLIDES
         ei=ei
     )
   } else {
@@ -927,7 +981,7 @@ for (iter in 1:n_iter) {
         sigma = sigma,
         old_points = old_df,
         new_points = new_df,
-        title = "Actualizamos el GP y el EI con las nuevas observaciones",
+        title = "", #title = "Actualizamos el GP y el EI con las nuevas observaciones",
         ei=ei
     )
   }
@@ -950,12 +1004,13 @@ for (iter in 1:n_iter) {
     sigma = sigma,
     old_points = old_df,
     new_points = new_df,
-    title = "Elegimos un x* que maximice EI(x*)",
+    title = "GP", #"Elegimos un x* que maximice EI(x*)",
     ei = ei
   )
 
   new_y <- f(new_x)
-
+  
+  # actualizamos el df nuevo
   new_df <- data.frame(
     x=new_x,
     y=new_y
@@ -968,11 +1023,77 @@ for (iter in 1:n_iter) {
     sigma = sigma,
     old_points = old_df,
     new_points = new_df,
-    title = "Evaluamos f(x*)",
+    title = "GP", #title = "Evaluamos f(x*)",
     ei = ei
   )
 
 }
 ```
 
-# TRAS ESTO, LO QUE SE PUEDE HACER ES VER plot[[i]] Y OBSERVAR CÓMO SE ACTUALIZA PASO A PASO EL MODELO
+# Ejecución paso a paso
+
+```{r results='asis', echo=FALSE}
+
+for (i in seq_along(plots)) {
+
+  cat("\n---\n")
+
+  title <- ""
+
+  if (i == 1) {
+    title <- "Función subyacente y GP a priori"
+  }
+
+  if (i == 2) {
+    title <- "Sampleo inicial"
+  }
+
+  if (i == 3) {
+    title <- "Evaluamos f(x)"
+  }
+
+  if (i == 4) {
+    title <- "Actualizamos nuestro conocimiento"
+  }
+
+  if (i > 4 & (i %% 3 == 2)) {
+    title <- "Elegimos un x* que maximice EI(x*)"
+  }
+
+  if (i > 4 & (i %% 3 == 0)) {
+    title <- "Evaluamos f(x*)"
+  }
+
+  if (i > 4 & (i %% 3 == 1)) {
+    title <- "Actualizamos nuestro conocimiento"
+  }
+
+  cat(
+    paste0(
+      "\n# ",
+      title,
+      "\n\n"
+    )
+  )
+
+  print(plots[[i]])
+}
+```
+
+---
+
+# Cerrando
+
+El algoritmo de Optimización Bayesiana puede resultar útil cuando:
+
++ $f(x)$ es muy cara de evaluar.
+
++ $f(x)$ es una caja negra.
+
++ Tenemos cierto conocimiento o intuición sobre *cómo* es la función y queremos incorporarlo a nuestro algoritmo (en formar de *prior*).
+
+Pero puede sufrir cuando:
+
++ $d$ la dimensión de $x$ es muy grande (en general, $d > 20$).
+
++ la función no es suave o tiene mucho ruido.
