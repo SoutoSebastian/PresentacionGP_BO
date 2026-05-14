@@ -37,7 +37,7 @@ El problema que estamos queriendo resolver es:
 
 ---
 
-## Funciones de caja negra
+# Funciones de caja negra
 \vspace{0.5cm}
 
 La función real $f(x)$ (en el ejemplo, cantidad de petróleo en el terreno en una ubicación $x$) es desconocida. Solo podemos probar un valor de $x$ y observar el resultado.
@@ -70,7 +70,7 @@ Para abordar estos casos es que surgen métodos como la \structure{\textbf{Optim
 
 ---
 
-## Bayesian Optimization (BO)
+# Bayesian Optimization (BO)
 \vspace{0.8cm}
 
 
@@ -87,7 +87,7 @@ Para abordar estos casos es que surgen métodos como la \structure{\textbf{Optim
 
 ---
 
-## Componentes principales
+# Componentes principales
 
 La optimización bayesiana tiene dos componentes fundamentales:
 
@@ -113,7 +113,7 @@ Ejemplos:
 
 ---
 
-## 1. Procesos Gaussianos
+# 1. Procesos Gaussianos
 
 ### Motivación
 
@@ -151,7 +151,7 @@ f(x) \sim GP(\mu(x), k(x,x'))
 
 ---
 
-## Componentes
+# Componentes
 
 
 ### Mean function
@@ -202,7 +202,7 @@ Hiperparámetros:
 ---
 
 
-## Actualización Bayesiana del GP
+# Actualización Bayesiana del GP
 
 
 \vspace{0.3cm}
@@ -233,7 +233,7 @@ El posterior sigue siendo un GP.
 
 ---
 
-## Distribución conjunta
+# Distribución conjunta
 
 Para puntos $x_1,\dots,x_n$, el GP induce:
 
@@ -304,7 +304,7 @@ K(x_*,X)K(X,X)^{-1}K(X,x_*)
 
 ---
 
-## 2. Función de adquisición
+# 2. Función de adquisición
 
 
 Función que utiliza el modelo probabilístico actual para decidir cuál es el próximo punto más conveniente para evaluar de la función objetivo.
@@ -327,7 +327,7 @@ Evaluar donde la incertidumbre es grande.
 
 ---
 
-## Upper Confidence Bound (UCB)
+# Upper Confidence Bound (UCB)
 
 
 ### Definición
@@ -347,7 +347,7 @@ UCB(x)=\mu_n(x)+\kappa \sigma_n(x)
 
 ---
 
-## Expected Improvement (EI)
+# Expected Improvement (EI)
 
 ### Definición
 
@@ -377,7 +377,7 @@ El próximo punto a evaluar será aquel que maximice $EI(x)$.
 
 ---
 
-## Pseudocódigo del algoritmo 
+# Pseudocódigo del algoritmo 
 
 \scriptsize
 ```text
@@ -405,11 +405,16 @@ Retornar:
 
 ---
 
-# Simulación
+\begin{center}
+
+{\Huge Simulación}
+
+\end{center}
+
 
 ---
 
-## Benchmarks
+# Benchmarks
 
 Podemos comparar el rendimiento del algoritmo con otros dos más simples sobre un intervalo $[a, b]$ fijo y muchas funciones definidas sobre el mismo:
 
@@ -423,7 +428,7 @@ Genera $N$ puntos en el intervalo, evalúa y toma el máximo.
 
 ---
 
-## Regret
+# Regret
 
 A fines de tener una métrica cuantitativa para la comparación, dada una función $f(x)$ con máximo en $x_0$ y $x*$ el óptimo encontrado por un algoritmo, 
 definimos el $Regret$ del mismo:
@@ -737,14 +742,14 @@ df_results
 
 ```
 
-## Resultados
+# Resultados
 
 \vspace{0.8cm}
 
 ```{r results='asis', echo=FALSE, message=FALSE, warning=FALSE}
 # resultados
 
-# si tienen idea de cómo hacer que se vea mejor esta tablita en la slides, bienvenido sea
+
 
 summary_table <- df_results %>%
   group_by(method) %>%
@@ -775,7 +780,7 @@ cat("\\end{center}\n")
 
 ---
 
-## Resultados
+# Resultados
 
 ```{r }
 # un box plot de todd la vida
@@ -1118,8 +1123,11 @@ for (iter in 1:n_iter) {
 
 }
 ```
+\begin{center}
 
-# Ejecución paso a paso
+\Huge{Ejecución paso a paso}
+
+\end{center}
 
 ```{r results='asis', echo=FALSE}
 
