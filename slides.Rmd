@@ -3,6 +3,10 @@ title: "Bayesian Optimization Algorithm"
 author: "Lucas Cavadini, Martin Calsina y Sebastian Souto"
 date: "`r Sys.Date()`"
 output: beamer_presentation
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{amsmath}
+  - \usepackage{amssymb}
 ---
 
 ```{r setup, include=FALSE}
@@ -12,9 +16,10 @@ knitr::opts_chunk$set(echo = FALSE)
 ---
 
 ## Imaginemos este problema
+\vspace{0.5cm}
 
 Una empresa petrolera está buscando la mejor zona para perforar. Pero surgen algunos inconvenientes:
-
+\vspace{0.2cm}
 
 - cada perforación cuesta mucho dinero
 
@@ -22,7 +27,7 @@ Una empresa petrolera está buscando la mejor zona para perforar. Pero surgen al
 
 - solo vamos a conocer información sobre ese punto específico donde fue la perforación
 
-\vspace{0.8cm}
+\vspace{0.6cm}
 
 El problema que estamos queriendo resolver es:
 \[
@@ -33,11 +38,13 @@ El problema que estamos queriendo resolver es:
 ---
 
 ## Funciones de caja negra
+\vspace{0.5cm}
 
 La función real $f(x)$ (en el ejemplo, cantidad de petróleo en el terreno en una ubicación $x$) es desconocida. Solo podemos probar un valor de $x$ y observar el resultado.
-
+\vspace{0.2cm}
 
 Esto se conoce como función de \textbf{caja negra}:
+\vspace{0.4cm}
 
 - no conocemos su fórmula explícita
 
@@ -52,7 +59,9 @@ Si quisiéramos encontrar un óptimo de la función objetivo de manera eficiente
 
 ## ¿Cómo podemos encontrar las mejores zonas para perforar?
 
+\vspace{0.5cm}
 Una estrategia podría ser, por ejemplo, probar ubicaciones al azar. Pero esto puede ser muy ineficiente (cada perforación es cara, el presupuesto es limitado y encima podríamos quedarnos buscando en zonas malas). 
+\vspace{0.2cm}
 
 Para abordar estos casos es que surgen métodos como la \structure{\textbf{Optimización Bayesiana}}: 
 
@@ -61,13 +70,18 @@ Para abordar estos casos es que surgen métodos como la \structure{\textbf{Optim
 
 ---
 
-## Bayesian Optimization
+## Bayesian Optimization (BO)
+\vspace{0.8cm}
 
-El algoritmo mezcla algunas ideas importantes:
 
 - Construye un modelo probabilístico para estimar la distribución del espacio de soluciones factibles.
-- A partir de otra función ("función de adquisición", que si conocemos y podemos evaluar), y de las estimaciones del modelo probabilístico se decide en qué puntos evaluar a la función objetivo.
-- Dicha función de adquisición es elegida según de que se quiera priorizar a la hora de evaluar nuevas observaciones: zonas de alta probabilidad de encontrar buenas soluciones ("explotación") vs. zonas de alta incertidumbre donde aún no evaluamos ("exploración").
+
+\vspace{0.1cm}
+
+- Decide en qué puntos es mejor volver a evaluar a nuestra función objetivo.
+
+\vspace{0.1cm}
+
 - Con las nuevas observaciones se actualiza el modelo probabilístico y se repite el proceso.
 
 
@@ -424,12 +438,14 @@ En lo siguiente, elegimos utilizar $[a, b] = [0, 100]$, $k=100$ funciones y $N=8
 ---
 
 
-```{r results='hide'}
+```{r setup-packages, include=FALSE, message=FALSE, warning=FALSE}
 # setup, librerías y seed
 
 library(DiceKriging) # tiene todo lo de GPs
 library(ggplot2) # grafiquinhos
 library(patchwork) # simplifica un toque el uso de ggplot2
+library(dplyr)
+library(knitr)
 
 set.seed(123)
 
@@ -723,7 +739,9 @@ df_results
 
 ## Resultados
 
-```{r}
+\vspace{0.8cm}
+
+```{r results='asis', echo=FALSE, message=FALSE, warning=FALSE}
 # resultados
 
 # si tienen idea de cómo hacer que se vea mejor esta tablita en la slides, bienvenido sea
@@ -731,12 +749,26 @@ df_results
 summary_table <- df_results %>%
   group_by(method) %>%
   summarise(
-    mean_regret = mean(regret),
-    sd_regret = sd(regret),
-    mean_best = mean(best_found)
-  )
+    `Regret promedio` = round(mean(regret), 2),
+    `Desvío regret` = round(sd(regret), 2),
+    `Mejor valor promedio` = round(mean(best_found), 2),
+    .groups = "drop"
+  ) %>%
+  arrange(`Regret promedio`)
 
-print(summary_table)
+tabla_latex <- knitr::kable(
+  summary_table,
+  format = "latex",
+  booktabs = TRUE,
+  align = "lccc"
+)
+
+cat("\\begin{center}\n")
+cat("\\renewcommand{\\arraystretch}{1.25}\n")
+cat("\\resizebox{1.00\\textwidth}{!}{%\n")
+cat(as.character(tabla_latex))
+cat("\n}\n")
+cat("\\end{center}\n")
 # OJO, si el intervalo es muy chiquito, por ser nuestras funciones relativamente suaves y N también chico, Grid Search y Random Search
 # le pasan el trapo al GP-BO
 ```
