@@ -543,7 +543,7 @@ generate_function <- function() {
 expected_improvement <- function(mu_n, sigma_n, f_best,
                                  x_grid = NULL,
                                  X_obs = NULL,
-                                 tol = 1e-13) {
+                                 tol = NULL) {
 
   ei <- rep(0, length(mu_n))
 
@@ -557,7 +557,8 @@ expected_improvement <- function(mu_n, sigma_n, f_best,
 
   # forzar EI = 0 en puntos observados
   if(!is.null(x_grid) && !is.null(X_obs)) {
-
+    tol <- (x_grid[2] - x_grid[1])
+      
     for(x_obs in X_obs){
       ei[abs(x_grid - x_obs) < tol] <- 0
     }
@@ -655,7 +656,9 @@ bayes_opt <- function(f, # la f a optimizar
     ei <- expected_improvement(
       mu,
       sigma,
-      max(y_obs) #el f* del paper
+      max(y_obs), #el f* del paper
+      x_grid = x_grid,
+      X_obs = X_obs
     )
 
     # próximo punto: el paper no aclara cómo conseguir el x que maximice el EI_n(x), sólo te dice "no te persigas, que esto se
@@ -1062,7 +1065,9 @@ for (iter in 1:n_iter) {
   ei <- expected_improvement(
     mu_n = mu,
     sigma_n = sigma,
-    max(c(y_obs, y_new))
+    max(c(y_obs, y_new)),
+    x_grid = x_grid,
+    X_obs = c(X_obs, X_new)
   )
   
   if (nrow(old_df) == 0) { #la primer iter dará 0, el resto chill
