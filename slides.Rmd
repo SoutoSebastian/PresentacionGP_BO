@@ -540,21 +540,30 @@ generate_function <- function() {
 # En el paper está la eq 8 para el EI(x), yo uso la fórmula que citan acá:
 # https://stats.stackexchange.com/questions/426782/intuitive-understanding-of-expected-improvement-for-gaussian-process
 # que es un toque más corta, si quieren usamos la del paper, no hay drama 
-expected_improvement <- function(mu_n, sigma_n, f_best) {
+expected_improvement <- function(mu_n, sigma_n, f_best,
+                                 x_grid = NULL,
+                                 X_obs = NULL,
+                                 tol = 1e-13) {
 
-  # esto es lo que va dentro de la funciones de densidad y acumulada de la normal
-  z <- (mu_n - f_best) / sigma_n
+  ei <- rep(0, length(mu_n))
 
-  ei <- (mu_n - f_best) * pnorm(z) +
-        sigma_n * dnorm(z)
- 
-  
-  # si sigma_n es aprox 0, es porque es un punto ya sampleado (o muy cerca, numéricamente iguales),
-  # su valor de f(x) debe ser menor igual a uno de los f_m(x), m <= n que vimos antes
-  ei[sigma_n < 1e-9] <- 0 # su EI es 0 entonces
+  valid <- sigma_n > 1e-9
+
+  z <- (mu_n[valid] - f_best) / sigma_n[valid]
+
+  ei[valid] <- 
+    (mu_n[valid] - f_best) * pnorm(z) +
+    sigma_n[valid] * dnorm(z)
+
+  # forzar EI = 0 en puntos observados
+  if(!is.null(x_grid) && !is.null(X_obs)) {
+
+    for(x_obs in X_obs){
+      ei[abs(x_grid - x_obs) < tol] <- 0
+    }
+  }
 
   return(ei)
-
 }
 ```
 
