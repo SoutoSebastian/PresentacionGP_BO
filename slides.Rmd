@@ -390,7 +390,7 @@ Mientras n <= N:
 
     Actualizar posterior GP
 
-    x_n <- argmax a(x)
+    x_n <- argmax acquisition(x)
 
     y_n <- f(x_n)
 
@@ -539,7 +539,7 @@ generate_function <- function() {
 # Devuelve un vector de EI(x) según los mu_n y sigma_n pasados.
 # En el paper está la eq 8 para el EI(x), yo uso la fórmula que citan acá:
 # https://stats.stackexchange.com/questions/426782/intuitive-understanding-of-expected-improvement-for-gaussian-process
-# que es un toque más corta, si quieren usamos la del paper, no hay drama 
+
 expected_improvement <- function(mu_n, sigma_n, f_best,
                                  x_grid = NULL,
                                  X_obs = NULL,
@@ -1208,3 +1208,48 @@ Pero puede sufrir cuando:
 + $d$ la dimensión de $x$ es muy grande (en general, $d > 20$).
 
 + la función no es suave o tiene mucho ruido.
+
+---
+
+# Bibliografía y recursos
+
+\vspace{0.3cm}
+
+### Papers y libros
+
+- Peter I. Frazier, *A Tutorial on Bayesian Optimization* (2018)
+
+  \vspace{0.1cm}
+
+  \scriptsize
+  \url{https://arxiv.org/abs/1807.02811}
+
+\vspace{0.3cm}
+
+- Carl Edward Rasmussen y Christopher K. I. Williams,  
+  *Gaussian Processes for Machine Learning* (2006)
+
+  \vspace{0.1cm}
+
+  \scriptsize
+  \url{https://gaussianprocess.org/gpml/}
+
+\vspace{0.4cm}
+
+### Videos recomendados
+
+- Introducción sencilla a los Procesos Gaussianos
+
+  \scriptsize
+  \url{https://www.youtube.com/watch?v=iDzaoEwd0N0}
+
+\vspace{0.2cm}
+
+- Procesos Gaussianos 
+
+  \scriptsize
+  \url{https://www.youtube.com/watch?v=BTEbaPoZ08Y}
+
+
+
+
